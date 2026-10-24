@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, clearAdminDeviceSessionCookies } from '@/lib/supabase/client';
 import { useState } from 'react';
 
 const navItems = [
@@ -34,6 +34,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setLoggingOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
+    clearAdminDeviceSessionCookies();
     router.push('/admin/login');
     router.refresh();
   }

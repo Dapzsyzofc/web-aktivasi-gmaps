@@ -1,38 +1,79 @@
 'use client';
 
-import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useState, useEffect } from 'react';
+import {
+  createClient,
+  setAdminDeviceSessionCookies,
+  clearAdminDeviceSessionCookies,
+  SAVED_EMAIL_STORAGE_KEY,
+} from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
+  const [expiredNotice, setExpiredNotice] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem(SAVED_EMAIL_STORAGE_KEY);
+      if (savedEmail) {
+        setEmail(savedEmail);
+      }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('expired') === '1') {
+        setExpiredNotice(true);
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setExpiredNotice(false);
     setLoading(true);
 
     try {
-      const supabase = createClient();
+      setAdminDeviceSessionCookies(rememberMe);
+      const supabase = createClient(rememberMe);
       const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (authError) {
+        clearAdminDeviceSessionCookies();
         setError('Email atau password salah');
         return;
       }
 
+      setAdminDeviceSessionCookies(rememberMe);
+
+      try {
+        if (rememberMe) {
+          localStorage.setItem(SAVED_EMAIL_STORAGE_KEY, email.trim());
+        } else {
+          localStorage.removeItem(SAVED_EMAIL_STORAGE_KEY);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+
       const next = new URLSearchParams(window.location.search).get('next');
-      const target = next && next.startsWith('/admin/') && !next.startsWith('//') ? next : '/admin';
+      const target =
+        next && next.startsWith('/admin/') && !next.startsWith('//')
+          ? next
+          : '/admin';
       router.push(target);
       router.refresh();
     } catch {
+      clearAdminDeviceSessionCookies();
       setError('Terjadi kesalahan. Coba lagi.');
     } finally {
       setLoading(false);
@@ -54,6 +95,12 @@ export default function LoginPage() {
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Masuk ke Dashboard</h2>
           <p className="text-sm text-gray-500 mb-6">Gunakan akun admin untuk melanjutkan</p>
+
+          {expiredNotice && (
+            <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800" role="status">
+              Sesi 7 hari pada perangkat ini telah berakhir. Silakan masuk kembali untuk verifikasi keamanan.
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -84,6 +131,21 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 disabled={loading}
               />
+            </div>
+
+            <div className="flex items-start gap-2.5 pt-1">
+              <input
+                id="remember-device"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={loading}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+              />
+              <label htmlFor="remember-device" className="text-xs text-gray-600 leading-snug cursor-pointer select-none">
+                <span className="font-medium text-gray-800 block">Ingat perangkat ini (7 hari)</span>
+                Simpan login di perangkat ini agar bisa langsung scan &amp; aktivasi kartu tanpa login ulang selama 7 hari.
+              </label>
             </div>
 
             {error && (
