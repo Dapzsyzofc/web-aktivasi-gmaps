@@ -103,9 +103,9 @@ export async function GET(
       return htmlResponse(renderHTML('disabled'), 200);
     }
 
-    // inactive
-    const loginHref = `/admin/login?next=${encodeURIComponent(activatePath)}`;
-    return htmlResponse(renderHTML('inactive', loginHref), 200);
+    // inactive — link directly to /admin/activate/[token]
+    // Middleware will check auth: if logged in → straight to form; if not → login → redirect back
+    return htmlResponse(renderHTML('inactive', activatePath), 200);
   } catch (e) {
     console.error('[/m/token] Unhandled error:', e);
     return htmlResponse(renderHTML('error'), 500);
@@ -119,12 +119,12 @@ function htmlResponse(body: string, status: number) {
   });
 }
 
-function renderHTML(status: 'inactive' | 'disabled' | 'not_found' | 'error' | 'no_url', adminHref?: string): string {
+function renderHTML(status: 'inactive' | 'disabled' | 'not_found' | 'error' | 'no_url', activateHref?: string): string {
   const config: Record<string, { title: string; message: string; sub: string; icon: string }> = {
     inactive: {
       title: 'Kartu Belum Diaktifkan',
       message: 'Kartu ini belum diaktifkan.',
-      sub: 'Silakan hubungi penjual kartu untuk melakukan aktivasi.',
+      sub: 'Silakan hubungi penjual kartu atau klik tombol di bawah untuk mengaktifkan.',
       icon: '⏳',
     },
     no_url: {
@@ -155,6 +155,14 @@ function renderHTML(status: 'inactive' | 'disabled' | 'not_found' | 'error' | 'n
 
   const c = config[status];
 
+  // For inactive cards, show a big activate button that links directly to /admin/activate/[token].
+  // Middleware protects /admin/* routes — if admin is already logged in on this browser,
+  // they go straight to the form without any login prompt.
+  const activateButton = activateHref
+    ? `<a class="activate-btn" href="${activateHref}">Aktivasi Kartu Ini</a>
+       <p class="activate-note">Admin yang sudah login akan langsung masuk ke form aktivasi.</p>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -171,8 +179,9 @@ function renderHTML(status: 'inactive' | 'disabled' | 'not_found' | 'error' | 'n
     h1{font-size:20px;font-weight:600;color:#212121;margin-bottom:8px}
     p{font-size:14px;color:#616161;line-height:1.6}
     .sub{margin-top:8px;font-size:13px;color:#9E9E9E}
-    .admin{display:inline-block;margin-top:24px;font-size:12px;color:#1A73E8;text-decoration:none;padding:8px 12px;border-radius:8px}
-    .admin:hover,.admin:focus-visible{background:#E8F0FE}
+    .activate-btn{display:block;margin:24px auto 0;padding:14px 24px;background:#1A73E8;color:#fff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:600;letter-spacing:0.01em;transition:background 0.15s}
+    .activate-btn:hover,.activate-btn:focus-visible{background:#1557B0}
+    .activate-note{margin-top:10px;font-size:11px;color:#9E9E9E}
     .brand{margin-top:32px;font-size:12px;color:#BDBDBD}
     .brand span{display:block;font-size:9px;margin-top:2px}
     .footer{margin-top:24px;font-size:10px;color:#BDBDBD;text-align:center;max-width:400px}
@@ -184,10 +193,11 @@ function renderHTML(status: 'inactive' | 'disabled' | 'not_found' | 'error' | 'n
     <h1>${c.title}</h1>
     <p>${c.message}</p>
     <p class="sub">${c.sub}</p>
-    ${adminHref ? `<a class="admin" href="${adminHref}">Admin? Masuk untuk mengaktifkan</a>` : ''}
+    ${activateButton}
     <div class="brand">Aktivasi GMaps<span>redirect by Dapzsyz</span></div>
   </div>
   <div class="footer">Aktivasi GMaps adalah layanan pihak ketiga dan tidak berafiliasi dengan Google. Google Maps adalah merek dagang Google.</div>
 </body>
 </html>`;
 }
+
