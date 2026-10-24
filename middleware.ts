@@ -60,6 +60,8 @@ export async function middleware(request: NextRequest) {
         maxAge,
         path: '/',
         sameSite: 'lax',
+        secure: true,
+        httpOnly: false,
       },
       cookies: {
         getAll() {
@@ -76,6 +78,8 @@ export async function middleware(request: NextRequest) {
               maxAge: options?.maxAge !== undefined ? options.maxAge : maxAge,
               path: options?.path || '/',
               sameSite: (options?.sameSite as any) || 'lax',
+              secure: true,
+              httpOnly: false,
             });
           });
         },
@@ -126,6 +130,8 @@ export async function middleware(request: NextRequest) {
       maxAge,
       path: '/',
       sameSite: 'lax',
+      secure: true,
+      httpOnly: false,
     });
   }
 

@@ -22,6 +22,8 @@ export async function createClient() {
         maxAge,
         path: '/',
         sameSite: 'lax',
+        secure: true,
+        httpOnly: false,
       },
       cookies: {
         getAll() {
@@ -35,6 +37,8 @@ export async function createClient() {
                 maxAge: options?.maxAge !== undefined ? options.maxAge : maxAge,
                 path: options?.path || '/',
                 sameSite: (options?.sameSite as any) || 'lax',
+                secure: true,
+                httpOnly: false,
               })
             );
           } catch {

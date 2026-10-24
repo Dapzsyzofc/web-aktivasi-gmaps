@@ -20,10 +20,9 @@ function getRememberPreferenceFromCookie(): boolean {
 export function setAdminDeviceSessionCookies(rememberMe: boolean) {
   if (typeof document === 'undefined') return;
   const maxAge = rememberMe ? SEVEN_DAYS_IN_SECONDS : ONE_DAY_IN_SECONDS;
-  const secureFlag =
-    typeof window !== 'undefined' && window.location.protocol === 'https:'
-      ? '; Secure'
-      : '';
+  const isHttps =
+    typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const secureFlag = isHttps ? '; Secure' : '';
   const now = String(Date.now());
 
   document.cookie = `${ADMIN_REMEMBER_COOKIE}=${rememberMe ? '1' : '0'}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secureFlag}`;
@@ -51,6 +50,7 @@ export function createClient(rememberOverride?: boolean) {
         maxAge,
         path: '/',
         sameSite: 'lax',
+        secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
       },
     }
   );
