@@ -10,6 +10,17 @@ import {
   renderCardDesign,
 } from '@/lib/design/cardTemplate';
 
+function resolveClientAppUrl(): string {
+  const envUrl = (process.env.NEXT_PUBLIC_APP_URL || '').trim().replace(/\/+$/, '');
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return envUrl;
+}
+
 export default function DesignerPage() {
   return (
     <Suspense fallback={null}>
@@ -41,7 +52,7 @@ function PrintBoards() {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const appUrl = resolveClientAppUrl();
 
   useEffect(() => {
     loadTemplateImage()
@@ -51,7 +62,7 @@ function PrintBoards() {
 
   useEffect(() => {
     if (batchId) {
-      fetch(`/api/admin/batches/${batchId}`)
+      fetch(`/api/admin/batches/${batchId}`, { cache: 'no-store' })
         .then(res => (res.ok ? res.json() : null))
         .then(data => {
           if (data) {
@@ -66,7 +77,7 @@ function PrintBoards() {
         })
         .catch(() => {});
     } else if (cardId) {
-      fetch(`/api/admin/cards/${cardId}`)
+      fetch(`/api/admin/cards/${cardId}`, { cache: 'no-store' })
         .then(res => (res.ok ? res.json() : null))
         .then(data => {
           if (data) {
@@ -155,7 +166,7 @@ function PrintBoards() {
         <h1 className="text-2xl font-bold text-gray-900">Cetak Papan</h1>
         <p className="text-sm text-gray-500 mt-1">
           {batchName && `Batch ${batchName} • `}
-          {cards.length} papan • QR menuju <span className="font-mono text-xs">/m/[token]</span>
+          {cards.length} papan • QR menuju <span className="font-mono text-xs">{appUrl}/m/[token]</span>
         </p>
       </div>
 

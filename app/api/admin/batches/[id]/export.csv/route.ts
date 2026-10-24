@@ -4,8 +4,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { generateCSV } from '@/lib/utils/csv';
 import { getPublicUrl } from '@/lib/utils/token';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { error, session } = await requireAdmin();
@@ -30,7 +32,7 @@ export async function GET(
     const rows = cards.map(card => ({
       batch_name: batch.name,
       inventory_code: card.inventory_code,
-      public_url: getPublicUrl(card.public_token),
+      public_url: getPublicUrl(card.public_token, request.nextUrl.origin),
       status: card.status,
       created_at: card.created_at,
     }));

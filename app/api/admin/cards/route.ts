@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/session';
 import { listCards } from '@/lib/services/cards';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAdmin();
   if (error || !session) return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
@@ -15,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await listCards({ page, limit, status, batchId, search });
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -4,6 +4,17 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+function resolveClientAppUrl(): string {
+  const envUrl = (process.env.NEXT_PUBLIC_APP_URL || '').trim().replace(/\/+$/, '');
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return envUrl;
+}
+
 export default function CardDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -25,7 +36,7 @@ export default function CardDetailPage() {
 
   async function fetchCard() {
     try {
-      const res = await fetch(`/api/admin/cards/${params.id}`);
+      const res = await fetch(`/api/admin/cards/${params.id}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setCard(data);
@@ -38,7 +49,7 @@ export default function CardDetailPage() {
 
   async function fetchBusinesses() {
     try {
-      const res = await fetch('/api/admin/businesses?limit=100');
+      const res = await fetch('/api/admin/businesses?limit=100', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setBusinesses(data.businesses || []);
@@ -47,7 +58,8 @@ export default function CardDetailPage() {
   }
 
   async function generateQR(token: string) {
-    const url = `${window.location.origin}/m/${token}`;
+    const baseUrl = resolveClientAppUrl();
+    const url = `${baseUrl}/m/${token}`;
     try {
       const QRCode = (await import('qrcode')).default;
       const dataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 4, width: 300 });
@@ -138,7 +150,7 @@ export default function CardDetailPage() {
     );
   }
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const appUrl = resolveClientAppUrl();
   const publicUrl = `${appUrl}/m/${card.public_token}`;
   const statusLabels: Record<string, string> = { active: '✅ Aktif', inactive: '⏳ Belum Aktif', disabled: '🚫 Nonaktif' };
   const statusClass: Record<string, string> = { active: 'badge-active', inactive: 'badge-inactive', disabled: 'badge-disabled' };

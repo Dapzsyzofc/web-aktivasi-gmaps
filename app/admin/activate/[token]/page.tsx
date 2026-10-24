@@ -22,7 +22,7 @@ export default function ActivatePage() {
   const [justActivated, setJustActivated] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/admin/activate/${encodeURIComponent(token)}`)
+    fetch(`/api/admin/activate/${encodeURIComponent(token)}`, { cache: 'no-store' })
       .then(async res => {
         if (res.status === 404) setNotFound(true);
         else if (res.ok) setCard(await res.json());
@@ -30,7 +30,7 @@ export default function ActivatePage() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    fetch('/api/admin/businesses?limit=100')
+    fetch('/api/admin/businesses?limit=100', { cache: 'no-store' })
       .then(res => (res.ok ? res.json() : null))
       .then(data => data && setBusinesses((data.businesses || []).filter((b: any) => b.google_maps_url)))
       .catch(() => {});
@@ -93,6 +93,7 @@ export default function ActivatePage() {
   }
 
   const isActive = card.status === 'active';
+  const business = Array.isArray(card.businesses) ? card.businesses[0] : card.businesses;
 
   return (
     <div className="max-w-md mx-auto">
@@ -113,14 +114,14 @@ export default function ActivatePage() {
           </div>
           <div>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">UMKM</p>
-            <p className="text-base font-medium text-gray-900 mt-1">{card.businesses?.name}</p>
-            {card.businesses?.google_maps_url && (
-              <p className="text-xs text-gray-500 mt-1 break-all">{card.businesses.google_maps_url}</p>
+            <p className="text-base font-medium text-gray-900 mt-1">{business?.name}</p>
+            {business?.google_maps_url && (
+              <p className="text-xs text-gray-500 mt-1 break-all">{business.google_maps_url}</p>
             )}
           </div>
           <div className="flex flex-col gap-2">
-            {card.businesses?.google_maps_url && (
-              <a href={card.businesses.google_maps_url} target="_blank" rel="noopener noreferrer" className="btn-primary w-full">
+            {business?.google_maps_url && (
+              <a href={business.google_maps_url} target="_blank" rel="noopener noreferrer" className="btn-primary w-full">
                 Tes buka Google Maps
               </a>
             )}

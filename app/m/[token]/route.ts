@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { getCardByToken } from '@/lib/services/cards';
 import { requireAdmin } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+const NO_STORE_HEADERS: Record<string, string> = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'CDN-Cache-Control': 'no-store',
+  'Vercel-CDN-Cache-Control': 'no-store',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
 
 async function isAdmin() {
   try {
@@ -17,39 +28,46 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { token: string } }
 ) {
+  noStore();
+
   try {
-    const card = await getCardByToken(params.token);
+    const rawToken = decodeURIComponent(params.token).trim();
+    const card = await getCardByToken(rawToken);
 
     if (!card) {
       return new NextResponse(renderHTML('not_found'), {
         status: 404,
-        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+        headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
       });
     }
 
     if (card.status === 'active') {
-      const business = card.businesses as any;
-      if (business?.google_maps_url) {
-        return NextResponse.redirect(business.google_maps_url, {
+      const business = Array.isArray(card.businesses)
+        ? card.businesses[0]
+        : (card.businesses as any);
+      const mapsUrl = business?.google_maps_url?.trim();
+
+      if (mapsUrl) {
+        return NextResponse.redirect(mapsUrl, {
           status: 302,
-          headers: { 'Cache-Control': 'no-store' },
+          headers: NO_STORE_HEADERS,
         });
       }
     }
 
-    const activatePath = `/admin/activate/${encodeURIComponent(params.token)}`;
+    const activatePath = `/admin/activate/${encodeURIComponent(rawToken)}`;
 
     if (await isAdmin()) {
       return NextResponse.redirect(new URL(activatePath, request.url), {
         status: 302,
-        headers: { 'Cache-Control': 'no-store' },
+        headers: NO_STORE_HEADERS,
       });
     }
 
     if (card.status === 'disabled') {
       return new NextResponse(renderHTML('disabled'), {
         status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+        headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
       });
     }
 
@@ -57,12 +75,12 @@ export async function GET(
     const loginHref = `/admin/login?next=${encodeURIComponent(activatePath)}`;
     return new NextResponse(renderHTML('inactive', loginHref), {
       status: 200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+      headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
     });
   } catch {
     return new NextResponse(renderHTML('error'), {
       status: 500,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+      headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
     });
   }
 }

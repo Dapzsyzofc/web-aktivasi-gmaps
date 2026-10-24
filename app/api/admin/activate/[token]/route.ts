@@ -7,14 +7,17 @@ import { createBusiness } from '@/lib/services/businesses';
 import { createBusinessSchema, googleMapsUrlSchema } from '@/lib/validations/schemas';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 async function findCard(token: string) {
   const admin = createAdminClient();
+  const cleanToken = decodeURIComponent(token).trim();
   const { data } = await admin
     .from('cards')
     .select('id, inventory_code, status, public_token, business_id, activated_at, card_batches(name), businesses(id, name, google_maps_url)')
-    .eq('public_token', token)
-    .single();
+    .eq('public_token', cleanToken)
+    .maybeSingle();
   return data;
 }
 
@@ -24,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
   const card = await findCard(params.token);
   if (!card) return NextResponse.json({ error: 'Kartu tidak ditemukan' }, { status: 404 });
-  return NextResponse.json(card);
+  return NextResponse.json(card, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 const existingSchema = z.object({ business_id: z.string().uuid('ID UMKM tidak valid') });
@@ -68,7 +71,8 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     }
 
     await activateCard(card.id, businessId, session.user.id);
-    return NextResponse.json(await findCard(params.token));
+    const updated = await findCard(params.token);
+    return NextResponse.json(updated, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 });
   }

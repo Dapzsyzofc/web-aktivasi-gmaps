@@ -4,6 +4,17 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 
+function resolveClientAppUrl(): string {
+  const envUrl = (process.env.NEXT_PUBLIC_APP_URL || '').trim().replace(/\/+$/, '');
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return envUrl;
+}
+
 export default function BatchDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -18,7 +29,7 @@ export default function BatchDetailPage() {
 
   async function fetchBatch() {
     try {
-      const res = await fetch(`/api/admin/batches/${params.id}`);
+      const res = await fetch(`/api/admin/batches/${params.id}`, { cache: 'no-store' });
       if (res.ok) setBatch(await res.json());
     } catch {} finally {
       setLoading(false);
@@ -76,7 +87,7 @@ export default function BatchDetailPage() {
     );
   }
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const appUrl = resolveClientAppUrl();
   const hasActiveCards = (batch.cards || []).some((c: any) => c.status === 'active');
 
   return (

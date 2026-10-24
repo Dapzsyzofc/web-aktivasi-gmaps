@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createAuditLog } from './audit';
 
@@ -47,6 +48,12 @@ export async function updateBusiness(id: string, data: Partial<CreateBusinessPar
     .single();
 
   if (error || !business) throw new Error(`Gagal memperbarui UMKM: ${error?.message}`);
+
+  try {
+    revalidatePath('/m/[token]', 'page');
+  } catch {
+    // Ignore revalidate errors outside request context
+  }
 
   if (data.google_maps_url && data.google_maps_url !== oldData.data?.google_maps_url) {
     await createAuditLog({

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/session';
 import { getBatchById } from '@/lib/services/batches';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -12,7 +14,7 @@ export async function GET(
   try {
     const batch = await getBatchById(params.id);
     if (!batch) return NextResponse.json({ error: 'Batch tidak ditemukan' }, { status: 404 });
-    return NextResponse.json(batch);
+    return NextResponse.json(batch, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -4,8 +4,10 @@ import { getCardById } from '@/lib/services/cards';
 import { generateQRSvg } from '@/lib/services/qr';
 import { getPublicUrl } from '@/lib/utils/token';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { error, session } = await requireAdmin();
@@ -15,7 +17,7 @@ export async function GET(
     const card = await getCardById(params.id);
     if (!card) return NextResponse.json({ error: 'Kartu tidak ditemukan' }, { status: 404 });
 
-    const url = getPublicUrl(card.public_token);
+    const url = getPublicUrl(card.public_token, request.nextUrl.origin);
     const svg = await generateQRSvg(url);
 
     return new NextResponse(svg, {

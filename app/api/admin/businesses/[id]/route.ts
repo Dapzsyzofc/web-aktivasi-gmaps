@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/auth/session';
 import { getBusinessById, updateBusiness } from '@/lib/services/businesses';
 import { updateBusinessSchema } from '@/lib/validations/schemas';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -13,7 +15,7 @@ export async function GET(
   try {
     const business = await getBusinessById(params.id);
     if (!business) return NextResponse.json({ error: 'UMKM tidak ditemukan' }, { status: 404 });
-    return NextResponse.json(business);
+    return NextResponse.json(business, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

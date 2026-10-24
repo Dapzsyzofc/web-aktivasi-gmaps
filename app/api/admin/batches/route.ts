@@ -3,6 +3,8 @@ import { requireAdmin } from '@/lib/auth/session';
 import { createBatch, listBatches } from '@/lib/services/batches';
 import { createBatchSchema } from '@/lib/validations/schemas';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const { error, session } = await requireAdmin();
   if (error || !session) return NextResponse.json({ error: error || 'Unauthorized' }, { status: 401 });
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await listBatches(page, limit);
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

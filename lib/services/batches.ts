@@ -24,8 +24,23 @@ export async function createBatch(params: CreateBatchParams) {
   }
 
   const batchPrefix = generateBatchPrefix();
-  const cards = [];
 
+  // Determine the next starting inventory number so multiple batches don't collide on DAPZ-0001
+  const { data: existingCards } = await admin
+    .from('cards')
+    .select('inventory_code')
+    .ilike('inventory_code', `${batchPrefix}-%`);
+
+  let maxIndex = 0;
+  for (const row of existingCards || []) {
+    const match = row.inventory_code?.match(new RegExp(`^${batchPrefix}-(\\d+)$`));
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxIndex) maxIndex = num;
+    }
+  }
+
+  const cards = [];
   const existingTokens = new Set<string>();
 
   for (let i = 1; i <= quantity; i++) {
@@ -37,7 +52,7 @@ export async function createBatch(params: CreateBatchParams) {
 
     cards.push({
       batch_id: batch.id,
-      inventory_code: generateInventoryCode(batchPrefix, i),
+      inventory_code: generateInventoryCode(batchPrefix, maxIndex + i),
       public_token: token,
       status: 'inactive' as const,
     });

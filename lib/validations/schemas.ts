@@ -9,6 +9,9 @@ const ALLOWED_MAPS_DOMAINS = [
   'maps.google.co.id',
   'www.google.com/maps',
   'www.google.co.id/maps',
+  'g.page',
+  'www.g.page',
+  'share.google',
 ];
 
 function isValidGoogleMapsUrl(url: string): boolean {

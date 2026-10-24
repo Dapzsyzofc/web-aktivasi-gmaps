@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createAuditLog } from './audit';
 
@@ -15,14 +16,33 @@ export async function getCardById(id: string) {
 
 export async function getCardByToken(token: string) {
   const admin = createAdminClient();
+  const cleanToken = decodeURIComponent(token).trim();
+
   const { data, error } = await admin
     .from('cards')
-    .select('id, status, public_token, businesses(google_maps_url)')
-    .eq('public_token', token)
-    .single();
+    .select('id, status, public_token, business_id, businesses(id, name, google_maps_url)')
+    .eq('public_token', cleanToken)
+    .maybeSingle();
 
   if (error || !data) return null;
-  return data;
+
+  let business = Array.isArray(data.businesses) ? data.businesses[0] : (data.businesses as any);
+
+  if (!business?.google_maps_url && data.business_id) {
+    const { data: bizData } = await admin
+      .from('businesses')
+      .select('id, name, google_maps_url')
+      .eq('id', data.business_id)
+      .maybeSingle();
+    if (bizData) {
+      business = bizData;
+    }
+  }
+
+  return {
+    ...data,
+    businesses: business || null,
+  };
 }
 
 export async function listCards(params: {
@@ -66,17 +86,28 @@ export async function activateCard(cardId: string, businessId: string, actorId: 
     throw new Error('UMKM harus memiliki URL Google Maps sebelum aktivasi');
   }
 
-  const { error } = await admin
+  const { data: updatedCard, error } = await admin
     .from('cards')
     .update({
       status: 'active',
       business_id: businessId,
       activated_at: new Date().toISOString(),
+      disabled_at: null,
     })
     .eq('id', cardId)
-    .in('status', ['inactive', 'disabled']);
+    .select('id, public_token, status')
+    .single();
 
-  if (error) throw new Error(`Gagal mengaktifkan kartu: ${error.message}`);
+  if (error || !updatedCard) {
+    throw new Error(`Gagal mengaktifkan kartu: ${error?.message || 'Kartu tidak ditemukan'}`);
+  }
+
+  try {
+    revalidatePath(`/m/${updatedCard.public_token}`);
+    revalidatePath('/m/[token]', 'page');
+  } catch {
+    // Ignore revalidate errors outside request context
+  }
 
   await createAuditLog({
     actorId,
@@ -90,16 +121,27 @@ export async function activateCard(cardId: string, businessId: string, actorId: 
 export async function disableCard(cardId: string, actorId: string) {
   const admin = createAdminClient();
 
-  const { error } = await admin
+  const { data: updatedCard, error } = await admin
     .from('cards')
     .update({
       status: 'disabled',
       disabled_at: new Date().toISOString(),
     })
     .eq('id', cardId)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .select('id, public_token, status')
+    .single();
 
-  if (error) throw new Error(`Gagal menonaktifkan kartu: ${error.message}`);
+  if (error || !updatedCard) {
+    throw new Error(`Gagal menonaktifkan kartu: ${error?.message || 'Kartu tidak ditemukan'}`);
+  }
+
+  try {
+    revalidatePath(`/m/${updatedCard.public_token}`);
+    revalidatePath('/m/[token]', 'page');
+  } catch {
+    // Ignore revalidate errors outside request context
+  }
 
   await createAuditLog({
     actorId,
@@ -118,11 +160,13 @@ export async function enableCard(cardId: string, actorId: string) {
     .eq('id', cardId)
     .single();
 
-  if (!card?.business_id || !(card as any).businesses?.google_maps_url) {
+  const business = Array.isArray(card?.businesses) ? card.businesses[0] : (card as any)?.businesses;
+
+  if (!card?.business_id || !business?.google_maps_url) {
     throw new Error('Kartu harus terhubung ke UMKM dengan URL Maps yang valid');
   }
 
-  const { error } = await admin
+  const { data: updatedCard, error } = await admin
     .from('cards')
     .update({
       status: 'active',
@@ -130,9 +174,20 @@ export async function enableCard(cardId: string, actorId: string) {
       disabled_at: null,
     })
     .eq('id', cardId)
-    .eq('status', 'disabled');
+    .eq('status', 'disabled')
+    .select('id, public_token, status')
+    .single();
 
-  if (error) throw new Error(`Gagal mengaktifkan kembali kartu: ${error.message}`);
+  if (error || !updatedCard) {
+    throw new Error(`Gagal mengaktifkan kembali kartu: ${error?.message || 'Kartu tidak ditemukan'}`);
+  }
+
+  try {
+    revalidatePath(`/m/${updatedCard.public_token}`);
+    revalidatePath('/m/[token]', 'page');
+  } catch {
+    // Ignore revalidate errors outside request context
+  }
 
   await createAuditLog({
     actorId,
