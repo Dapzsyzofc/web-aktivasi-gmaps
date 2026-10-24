@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_noStore as noStore } from 'next/cache';
-import { getCardByToken } from '@/lib/services/cards';
-import { requireAdmin } from '@/lib/auth/session';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createServerClient } from '@supabase/ssr';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,10 +15,34 @@ const NO_STORE_HEADERS: Record<string, string> = {
   'Expires': '0',
 };
 
-async function isAdmin() {
+/**
+ * Check if the current request is from a logged-in admin.
+ * Reads cookies from the NextRequest object directly — NOT from next/headers.
+ * This avoids issues with cookies() in Route Handlers on Vercel.
+ */
+async function isAdmin(request: NextRequest): Promise<boolean> {
   try {
-    const { error } = await requireAdmin();
-    return !error;
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return request.cookies.getAll(); },
+          setAll() { /* read-only, no need to set cookies here */ },
+        },
+      },
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    return profile?.role === 'admin';
   } catch {
     return false;
   }
@@ -32,20 +56,25 @@ export async function GET(
 
   try {
     const rawToken = decodeURIComponent(params.token).trim();
-    const card = await getCardByToken(rawToken);
 
-    if (!card) {
-      return new NextResponse(renderHTML('not_found'), {
-        status: 404,
-        headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
-      });
+    // 1. Look up card via service role (bypasses RLS)
+    const supabase = createAdminClient();
+    const { data: card, error: cardError } = await supabase
+      .from('cards')
+      .select('id, status, business_id, public_token, businesses(google_maps_url)')
+      .eq('public_token', rawToken)
+      .single();
+
+    if (cardError || !card) {
+      console.error('[/m/token] Card not found:', rawToken, cardError?.message);
+      return htmlResponse(renderHTML('not_found'), 404);
     }
 
+    // 2. Active card → redirect to Google Maps
     if (card.status === 'active') {
-      const business = Array.isArray(card.businesses)
-        ? card.businesses[0]
-        : (card.businesses as any);
-      const mapsUrl = business?.google_maps_url?.trim();
+      // Handle both object and array shapes from Supabase
+      const biz = Array.isArray(card.businesses) ? card.businesses[0] : (card.businesses as any);
+      const mapsUrl = biz?.google_maps_url?.trim();
 
       if (mapsUrl) {
         return NextResponse.redirect(mapsUrl, {
@@ -53,11 +82,17 @@ export async function GET(
           headers: NO_STORE_HEADERS,
         });
       }
+
+      // Active but no URL — tell the visitor
+      console.error('[/m/token] Active card has no Maps URL:', card.id, 'business_id:', card.business_id);
+      return htmlResponse(renderHTML('no_url'), 200);
     }
 
+    // 3. Inactive/disabled card
     const activatePath = `/admin/activate/${encodeURIComponent(rawToken)}`;
 
-    if (await isAdmin()) {
+    // If visitor is a logged-in admin, send them to activation form
+    if (await isAdmin(request)) {
       return NextResponse.redirect(new URL(activatePath, request.url), {
         status: 302,
         headers: NO_STORE_HEADERS,
@@ -65,33 +100,38 @@ export async function GET(
     }
 
     if (card.status === 'disabled') {
-      return new NextResponse(renderHTML('disabled'), {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
-      });
+      return htmlResponse(renderHTML('disabled'), 200);
     }
 
     // inactive
     const loginHref = `/admin/login?next=${encodeURIComponent(activatePath)}`;
-    return new NextResponse(renderHTML('inactive', loginHref), {
-      status: 200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
-    });
-  } catch {
-    return new NextResponse(renderHTML('error'), {
-      status: 500,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
-    });
+    return htmlResponse(renderHTML('inactive', loginHref), 200);
+  } catch (e) {
+    console.error('[/m/token] Unhandled error:', e);
+    return htmlResponse(renderHTML('error'), 500);
   }
 }
 
-function renderHTML(status: 'inactive' | 'disabled' | 'not_found' | 'error', adminHref?: string): string {
+function htmlResponse(body: string, status: number) {
+  return new NextResponse(body, {
+    status,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE_HEADERS },
+  });
+}
+
+function renderHTML(status: 'inactive' | 'disabled' | 'not_found' | 'error' | 'no_url', adminHref?: string): string {
   const config: Record<string, { title: string; message: string; sub: string; icon: string }> = {
     inactive: {
       title: 'Kartu Belum Diaktifkan',
       message: 'Kartu ini belum diaktifkan.',
       sub: 'Silakan hubungi penjual kartu untuk melakukan aktivasi.',
       icon: '⏳',
+    },
+    no_url: {
+      title: 'URL Belum Tersedia',
+      message: 'Kartu ini sudah aktif, namun link Google Maps belum tersedia.',
+      sub: 'Silakan hubungi penjual untuk informasi lebih lanjut.',
+      icon: '🔗',
     },
     disabled: {
       title: 'Kartu Tidak Tersedia',
